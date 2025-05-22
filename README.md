@@ -13,6 +13,12 @@ cd lemon
 pip install .
 ```
 
+## Links relevantes
+[Dataset usado para treinamento](https://wiki.cancerimagingarchive.net/pages/viewpage.action?pageId=101942541)
+
+[Modelo de segmentação 2D usado](https://wiki.cancerimagingarchive.net/pages/viewpage.action?pageId=101942541)
+
+
 ### Exemplo de uso
 
 from lemon.file_conversion import dicom_to_nifti
