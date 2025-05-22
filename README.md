@@ -19,6 +19,9 @@ pip install .
 [Modelo de segmentação 2D usado](https://wiki.cancerimagingarchive.net/pages/viewpage.action?pageId=101942541)
 
 
+[nnUnet - Projeto interessante para fazer o tipo de comparação para um mesmo dataset](https://github.com/MIC-DKFZ/nnUNet)
+
+
 ### Exemplo de uso
 
 from lemon.file_conversion import dicom_to_nifti
