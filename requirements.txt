@@ -1,0 +1,16 @@
+segmentation-models-pytorch
+torchmetrics
+nibabel
+torch
+numpy
+albumentations
+pathlib
+typing
+classification-models-3D
+efficientnet-3D
+segmentation-models-3D
+scikit-image
+matplotlib
+scikit-learn
+patchify
+tensorflow
