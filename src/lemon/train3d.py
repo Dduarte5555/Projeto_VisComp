@@ -159,19 +159,10 @@ def dice_coefficient_loss(y_true, y_pred):
     return 1 - dice_coefficient(y_true, y_pred)
 
 #Define parameters for our model.
-def train_model(path, filename):
+def train_model(path, filename, encoder_weights='imagenet', BACKBONE = 'vgg16', activation = 'softmax', patch_size = 64, n_classes = 2, channels=3, LR = 0.0001):
 
     train_imgs, train_msks, val_imgs, val_msks = load_dataset(path)
     X_train, X_test, Y_train, Y_test = format_loaded_to_categorical(train_imgs, train_msks, val_imgs, val_msks, n_classes=2)
-
-    encoder_weights = 'imagenet'
-    BACKBONE = 'vgg16'  #Try vgg16, efficientnetb7, inceptionv3, resnet50
-    activation = 'softmax'
-    patch_size = 64
-    n_classes = 2
-    channels=3
-
-    LR = 0.0001
 
     optim = keras.optimizers.Adam(LR)
 

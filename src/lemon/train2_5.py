@@ -9,8 +9,10 @@ import segmentation_models_pytorch as smp
 from torchmetrics.classification import BinaryJaccardIndex
 from torch.utils.data import DataLoader
 from torch.optim import Adam
-from torchmetrics.classification import BinaryJaccardIndex
 import os
+from pathlib import Path
+import sys
+
 
 
 class WindowedVolDataset(Dataset):
@@ -176,11 +178,8 @@ def get_dataloaders_resized (path, win_size, batch_size):
     )
     return loader, val_loader 
 
-def train_2_5D(path, win_size, file_name):
-    LR          = 1e-3
-    N_EPOCHS    = 50
-    BATCH_SIZE  = 4
-    THRESH_IoU  = 0.20      # threshold menor p/ classe muito rara
+def train_2_5D(path, win_size, file_name, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20):
+    
     DEVICE      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     loader, val_loader = get_dataloaders_resized(path,win_size, BATCH_SIZE)
@@ -286,5 +285,8 @@ def train_2_5D(path, win_size, file_name):
           max_score = val_iou
     return f'best_model{file_name}.p'
 
-def train2D(path):
-    return train_2_5D(path, 1, "2D")
+def train2D(path, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20):
+    return train_2_5D(path, 1, "2D", LR, N_EPOCHS, BATCH_SIZE, THRESH_IoU)
+
+if __name__ == "__main__":
+    train2D("../../Dataset001_BREAST")
