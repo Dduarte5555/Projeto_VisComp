@@ -33,20 +33,16 @@ def run_3d_inference(image_path: str, model_path: str):
     
     patch_size = 64
 
-    # --- 2. Load and Scale Image ---
+    # --- 2. Load and Prepare Image Data ---
     print(f"Loading image: {image_path}")
     img_nii = nib.load(image_path)
     original_image_data = img_nii.get_fdata()
 
-    # a) Scale the entire volume to the standard [0, 255] image range.
-    # This is a critical step for the VGG16 preprocessor.
-    min_val = np.min(original_image_data)
-    max_val = np.max(original_image_data)
-    image_scaled_255 = (original_image_data - min_val) / (max_val - min_val) * 255.0
-    image_scaled_255 = image_scaled_255.astype(np.float32)
+    # Convert to float32, matching the training script. DO NOT SCALE.
+    image_float = original_image_data.astype(np.float32)
 
-    # --- 3. Pad the [0, 255] Scaled Image ---
-    original_shape = image_scaled_255.shape
+    # --- 3. Pad Image ---
+    original_shape = image_float.shape
     pad_width = []
     for dim_size in original_shape:
         remainder = dim_size % patch_size
@@ -58,10 +54,9 @@ def run_3d_inference(image_path: str, model_path: str):
             pad_after = pixels_to_add - pad_before
             pad_width.append((pad_before, pad_after))
 
-    padded_image = np.pad(image_scaled_255, pad_width, mode='constant', constant_values=0)
+    padded_image = np.pad(image_float, pad_width, mode='constant', constant_values=0)
     padded_shape = padded_image.shape
-    print(f"Original shape: {original_shape}, Padded shape: {padded_shape}")
-
+    
     # --- 4. Create Patches ---
     patches = patchify(padded_image, (patch_size, patch_size, patch_size), step=patch_size)
     patches_reshaped = patches.reshape(-1, patch_size, patch_size, patch_size)
@@ -69,45 +64,31 @@ def run_3d_inference(image_path: str, model_path: str):
 
     # --- 5. Preprocess Patches using the Training Script's Method ---
     print("Applying preprocessing to patches...")
-    
-    # a) Get the wrapped preprocessing function from the library
     _, specific_preprocess_input_wrapped = Classifiers.get('vgg16')
-
-    # b) Unwrap it to get the actual underlying function, just like in training
     if hasattr(specific_preprocess_input_wrapped, '__wrapped__'):
         actual_preprocess_function = specific_preprocess_input_wrapped.__wrapped__
-        print("Using __wrapped__ to get the original preprocess_input function.")
     else:
         actual_preprocess_function = specific_preprocess_input_wrapped
-        print("Warning: __wrapped__ not found, using the function as is.")
-        
-    # c) Apply the function to the patches
     preprocessed_patches = actual_preprocess_function(patches_3_channel)
 
     # --- 6. Run Prediction ---
     print(f"Running prediction on {len(preprocessed_patches)} patches...")
     prediction_patches = model.predict(preprocessed_patches, batch_size=4)
-    
-    # Use a threshold on the foreground class probability
     foreground_probs = prediction_patches[..., 1]
-    threshold = 0.525 # Adjust this threshold as needed
+    threshold = 0.5 # You can now tune this threshold meaningfully
     predicted_mask_patches = (foreground_probs >= threshold).astype(np.uint8)
 
-    # --- 7. Reconstruct Full Mask from Patches ---
+    # --- 7. Reconstruct & Un-pad ---
     predicted_mask_grid = predicted_mask_patches.reshape(patches.shape)
     reconstructed_mask = unpatchify(predicted_mask_grid, padded_shape)
-
-    # --- 8. Un-pad (Crop) the Mask to Original Size ---
     crop_slices = tuple(slice(pad[0], dim_size + pad[0]) for dim_size, pad in zip(original_shape, pad_width))
     final_prediction_mask = reconstructed_mask[crop_slices]
 
-    # --- 9. Post-Process the Final Mask ---
-    print("Post-processing mask to remove noise...")
+    # --- 8. Post-Process ---
     final_prediction_mask = post_process_mask(final_prediction_mask, min_size=500)
-
     print("Inference complete.")
 
-    # --- 10. Load Ground Truth for Comparison ---
+    # --- 9. Load Ground Truth ---
     ground_truth_data = None
     mask_path = image_path.replace("ImagesVl", "labelsVl")
     if os.path.exists(mask_path):
@@ -116,7 +97,6 @@ def run_3d_inference(image_path: str, model_path: str):
         print(f"Warning: Ground truth mask not found at {mask_path}")
 
     return original_image_data, final_prediction_mask, ground_truth_data
-
 
 def visualize_with_slider(image_volume: np.ndarray, predicted_mask: np.ndarray, ground_truth_mask: np.ndarray = None):
     """
@@ -182,7 +162,7 @@ def visualize_with_slider(image_volume: np.ndarray, predicted_mask: np.ndarray, 
     plt.show()
 
 if __name__ == "__main__":    
-    model_path = "best_model3d_64x64x64.h5"
+    model_path = "best_model3d_64x64x64.keras"
     img_path = "Dataset001_BREAST/ImagesVl/ISPY1_1238.nii.gz"
 
     original_image, predicted_mask, ground_truth_mask = run_3d_inference(img_path, model_path)
