@@ -9,10 +9,9 @@ import segmentation_models_pytorch as smp
 from torchmetrics.classification import BinaryJaccardIndex
 from torch.utils.data import DataLoader
 from torch.optim import Adam
+from torchmetrics.classification import BinaryJaccardIndex
 import os
 from pathlib import Path
-import sys
-
 
 
 class WindowedVolDataset(Dataset):
@@ -29,6 +28,8 @@ class WindowedVolDataset(Dataset):
         self.preload  = preload
         self.trf      = transforms
 
+        print("found:")
+        print(Path(images_dir))
         self.img_paths = sorted(Path(images_dir).glob("*.nii*"))
         self.msk_paths = [Path(masks_dir) / p.name for p in self.img_paths]
 
@@ -178,8 +179,13 @@ def get_dataloaders_resized (path, win_size, batch_size):
     )
     return loader, val_loader 
 
-def train_2_5D(path, win_size, file_name, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20):
-    
+def train_model2_5d(path, file_name,
+                    win_size = 3,
+                    LR          = 1e-3,
+                    N_EPOCHS    = 50,
+                    BATCH_SIZE  = 4,
+                    THRESH_IoU  = 0.20):
+
     DEVICE      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     loader, val_loader = get_dataloaders_resized(path,win_size, BATCH_SIZE)
@@ -187,7 +193,7 @@ def train_2_5D(path, win_size, file_name, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  
     model = smp.UnetPlusPlus(
         encoder_name="efficientnet-b4",
         encoder_weights="imagenet",
-        in_channels=1,
+        in_channels=win_size,
         classes=1,
         activation=None).to(DEVICE)
 
@@ -250,7 +256,7 @@ def train_2_5D(path, win_size, file_name, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  
             metric.update(preds, yb.unsqueeze(1))
         return metric.compute().item()
 
-    max_score = 0.36
+    max_score = 0
     for epoch in range(1, N_EPOCHS + 1):
         model.train()
         running_loss = 0.0
@@ -270,8 +276,8 @@ def train_2_5D(path, win_size, file_name, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  
 
             running_loss += loss.item() * xb.size(0)
             i += 1
-            print("\r" + f"epoch:{epoch}, {i}/{4647}", end="")
-            if i >= 4647:
+            print("\r" + f"epoch:{epoch}, {i}/{len(loader)}", end="")
+            if i >= len(loader):
               print("")
               break
 
@@ -281,12 +287,19 @@ def train_2_5D(path, win_size, file_name, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  
 
         print(f"Epoch {epoch:03d} | Loss {train_loss:.4f} | IoU val {val_iou:.4f}")
         if val_iou > max_score:
-          torch.save(model, f'best_model{file_name}.p th')
+          torch.save(model, f'best_model{file_name}.pth')
           max_score = val_iou
-    return f'best_model{file_name}.p'
+    return f'best_model{file_name}.pth'
 
-def train2D(path, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20):
-    return train_2_5D(path, 1, "2D", LR, N_EPOCHS, BATCH_SIZE, THRESH_IoU)
+def train_model2d(path, filename, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20):
+    return train_model2_5d(path, filename, 
+                        win_size=1,
+                        LR=LR,
+                        N_EPOCHS=N_EPOCHS,
+                        BATCH_SIZE=BATCH_SIZE,
+                        THRESH_IoU=THRESH_IoU)
 
 if __name__ == "__main__":
-    train2D("../../Dataset001_BREAST")
+    dataset_path = "test_dataset"
+    train_model2d(dataset_path, "test_model2_5D", N_EPOCHS=10)
+    train_model2_5d(dataset_path,"test_model_2D", N_EPOCHS=10)

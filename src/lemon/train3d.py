@@ -11,12 +11,14 @@ from sklearn.model_selection import train_test_split
 import nibabel as nib
 import os
 from pathlib import Path
+from tensorflow import keras
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 def load_and_patch_images_masks(
     path: str,                          # <- dataset root
     subset: str = "train",              # "train" or "val"
-    image_marker_segment: str = "_DCE_0002_N3_zscored.nii.gz",
-    mask_filename_transform: tuple = ("_DCE_0002_N3_zscored.nii.gz", ".nii.gz"),
+    image_marker_segment: str = ".nii.gz",
+    mask_filename_transform: tuple = (".nii.gz", ".nii.gz"),
     patch_size: tuple = (64, 64, 64),
     step_size: int = 64
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -32,7 +34,7 @@ def load_and_patch_images_masks(
     path : str
         Root directory that contains the four folders above.
     subset : str, optional
-        `"train"` / `"training"`  → imagesTr & labelsTr  
+        `"train"` / `"training"`  → imagesTr & labelsTr
         `"val"`   / `"validation"`→ ImagesVl & labelsVl
     image_marker_segment, mask_filename_transform, patch_size, step_size
         Same meaning as in the original function.
@@ -124,28 +126,34 @@ def load_dataset(path):
     for i in range(len(val_imgs)):
         val_imgs[i] = np.reshape(val_imgs[i], (-1, val_imgs[i].shape[3], val_imgs[i].shape[4], val_imgs[i].shape[5]))
         val_msks[i] = np.reshape(val_msks[i], (-1, val_msks[i].shape[3], val_msks[i].shape[4], val_msks[i].shape[5]))
-    
+
     return train_imgs, train_msks, val_imgs, val_msks
 
 #Convert grey image to 3 channels by copying channel 3 times.
 #We do this as our unet model expects 3 channel input.
-def format_loaded_to_categorical(train_imgs, train_msks, val_imgs, val_msks, n_classes=2):
-    train_imgs = np.stack((train_imgs,)*3, axis=-1)
-    val_imgs = np.stack((val_imgs,)*3, axis=-1)
+def format_loaded_to_categorical(train_imgs, train_msks,
+                                 val_imgs,   val_msks,
+                                 n_classes=2):
+    # 1) merge lists ⟶ big arrays  (axis=0 = “patch index”)
+    train_imgs = np.concatenate(train_imgs, axis=0).astype(np.float32)
+    val_imgs   = np.concatenate(val_imgs,   axis=0).astype(np.float32)
 
+    train_msks = np.concatenate(train_msks, axis=0).astype(np.int32)
+    val_msks   = np.concatenate(val_msks,   axis=0).astype(np.int32)
 
-    train_msks = np.expand_dims(train_msks, axis=4)
-    train_msks = to_categorical(train_msks, num_classes=n_classes)
+    # 2) add channel dim and copy it 3×
+    #    (…[..., np.newaxis] ⇒ (N,64,64,64,1)  ➜ repeat along last axis)
+    train_imgs = np.repeat(train_imgs[..., np.newaxis], 3, axis=-1)
+    val_imgs   = np.repeat(val_imgs[..., np.newaxis],   3, axis=-1)
 
-    val_msks = np.expand_dims(val_msks, axis=4)
-    val_msks = to_categorical(val_msks, num_classes=n_classes)
-
-    #masks_list = np.concatenate(masks_list, axis=0)
+    # 3) masks: expand last dim, then one-hot
+    train_msks = to_categorical(train_msks[..., np.newaxis],
+                                num_classes=n_classes)
+    val_msks   = to_categorical(val_msks[..., np.newaxis],
+                                num_classes=n_classes)
 
     print("Finished split to categorical")
-    X_train, X_test = train_imgs, val_imgs
-    Y_train, Y_test = train_msks, val_msks
-    return X_train, X_test, Y_train, Y_test
+    return train_imgs, val_imgs, train_msks, val_msks
 
 
 # Loss Function and coefficients to be used during training:
@@ -159,10 +167,30 @@ def dice_coefficient_loss(y_true, y_pred):
     return 1 - dice_coefficient(y_true, y_pred)
 
 #Define parameters for our model.
-def train_model(path, filename, encoder_weights='imagenet', BACKBONE = 'vgg16', activation = 'softmax', patch_size = 64, n_classes = 2, channels=3, LR = 0.0001):
+def train_model3d(path, filename,
+                    batch_size=8,
+                    epochs=100,
+                    encoder_weights = 'imagenet',
+                    BACKBONE = 'vgg16',  #Try vgg16, efficientnetb7, inceptionv3, resnet50
+                    activation = 'softmax',
+                    patch_size = 64,
+                    n_classes = 2,
+                    channels=3,
+                    LR = 0.0001):
 
     train_imgs, train_msks, val_imgs, val_msks = load_dataset(path)
-    X_train, X_test, Y_train, Y_test = format_loaded_to_categorical(train_imgs, train_msks, val_imgs, val_msks, n_classes=2)
+    X_train, X_test, Y_train, Y_test = format_loaded_to_categorical(
+        train_imgs, train_msks, val_imgs, val_msks, n_classes=2)
+
+
+    encoder_weights = 'imagenet'
+    BACKBONE = 'vgg16'  #Try vgg16, efficientnetb7, inceptionv3, resnet50
+    activation = 'softmax'
+    patch_size = 64
+    n_classes = 2
+    channels=3
+
+    LR = 0.0001
 
     optim = keras.optimizers.Adam(LR)
 
@@ -206,11 +234,21 @@ def train_model(path, filename, encoder_weights='imagenet', BACKBONE = 'vgg16', 
 
     model.compile(optimizer = optim, loss=total_loss, metrics=metrics)
 
+    checkpoint = ModelCheckpoint(f'{filename}.keras',
+                             monitor='val_iou_score',
+                             verbose=1,
+                             save_best_only=True,
+                             mode='max')
+
     history=model.fit(X_train_prep,
               Y_train,
-              batch_size=8,
-              epochs=100,
+              batch_size=batch_size,
+              epochs=epochs,
               verbose=1,
-              validation_data=(X_test_prep, Y_test))
+              validation_data=(X_test_prep, Y_test),
+              callbacks=[checkpoint])
 
-    model.save(f'{filename}.h5')
+
+if __name__ == "__main__":
+    dataset_path = "test_dataset"
+    train_model3d(dataset_path,"3d_64x64x64", epochs=5)
