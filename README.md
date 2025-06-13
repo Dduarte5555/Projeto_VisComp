@@ -28,9 +28,9 @@ Caso seja necessário, você pode instalar um env de conda com a versão de pyth
 [Código base para o treinamento do modelo 3D de segmentação](https://github.com/bnsreenu/python_for_microscopists/blob/master/215_3D_Unet.ipynb)
 
 # Scripts de validação
-Para a validação do programa, uma série de scipts foram montados, e foram pensados de forma que não é necessário fazer a instalação da biblioteca para serem testados. Para rodar os scripts, basta rodar os seguintes comandos
+Para a validação do programa, uma série de scipts foram montados, que demonstram a usabilidade da biblioteca, e como ela funciona.
 
-```python src/lemon/Inference.py```
+```python test_inference.py```
 ```python src/lemon/Inference3d.py```
 ```python src/lemon/train_test.py```
 ```python src/lemon/train_test.py```
@@ -39,7 +39,7 @@ Para a validação do programa, uma série de scipts foram montados, e foram pen
 
 ## Funções de treinamento
 
-train_model3d, train_model2d e train_model2_5d  
+train3d.train_model3d, train2_5d.train_model2d e train2_5d.train_model2_5d  
 São usadas para fazer o treinamento individual de cada modelo.
 As funções usam os seguintes argumentos:  
 
@@ -59,13 +59,13 @@ train_model2_5d
     win_size - tamanhgo da janela que será usada para o treinamento do modelo 2.5D
     LR, N_EPOCHS, BATCH_SIZE, THRESH_IoU , classes - hiperparâmetros para o modelo, todos possuem um valor padrão (que também foram os valores usados para o treinmaento dos modelos) para facilitar o treinamento
 
-A função train_all faz o treinamento dos 3 modelos, sequencialmente
+A função train.train_all faz o treinamento dos 3 modelos, sequencialmente
 
 train_all
     dataset_path- Caminho para o dataset 
     batch_size, epochs, patch_size, n_classes, THRESH_IoU_2D, THRESH_IoU_2_5D, LR_2D, LR_2_5D, LR_3D - Hiperparâmetros distribuidos para cada função de treinamento.
 
-A função test_training faz um treinamento limitado em 5 epochs para o dataset especificado. Tem como intuito ser mais um sanity check, para garantir que o treinamento dos 3 modelos ocorrera de forma adequada, quando usando uma maior quantidade de epochs, e um dataset maior.
+A função train_test.test_training faz um treinamento limitado em 5 epochs para o dataset especificado. Tem como intuito ser mais um sanity check, para garantir que o treinamento dos 3 modelos ocorrera de forma adequada, quando usando uma maior quantidade de epochs, e um dataset maior.
 
 test_training
     path - Caminho para o dataset de teste
@@ -91,7 +91,7 @@ run_3d_inference-
 
 ## Testando a eficácia dos modelos
 
-Para testar a eficácia de um modelo, a função
+Para testar a eficácia de um modelo, a função Inference.evaluate_folder faz a inferencia de um diretório com imagens de validação, procura por máscaras que tenham um match para fazer a validação, e tira as métricas apropriadas.
 
 evaluate_folder(
     images_dir="diretorio com as imagens de validacao", 
