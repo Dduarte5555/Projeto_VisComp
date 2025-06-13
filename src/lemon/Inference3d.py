@@ -11,10 +11,6 @@ from skimage.morphology import remove_small_objects, binary_closing
 from classification_models_3D.tfkeras import Classifiers
 from skimage.morphology import remove_small_objects # For post-processing
 
-# The old direct import is no longer needed:
-# from tensorflow.keras.applications.vgg16 import preprocess_input
-
-
 def post_process_mask(mask: np.ndarray, min_size: int = 100):
     """
     Cleans up a binary mask by removing small noisy objects.
@@ -27,21 +23,17 @@ def run_3d_inference(image_path: str, model_path: str):
     """
     Runs patch-based 3D inference, precisely matching the training preprocessing.
     """
-    # --- 1. Load Model ---
     print(f"Loading model: {model_path}")
     model = tf.keras.models.load_model(model_path, compile=False)
     
     patch_size = 64
 
-    # --- 2. Load and Prepare Image Data ---
     print(f"Loading image: {image_path}")
     img_nii = nib.load(image_path)
     original_image_data = img_nii.get_fdata()
 
-    # Convert to float32, matching the training script. DO NOT SCALE.
     image_float = original_image_data.astype(np.float32)
 
-    # --- 3. Pad Image ---
     original_shape = image_float.shape
     pad_width = []
     for dim_size in original_shape:
@@ -57,12 +49,10 @@ def run_3d_inference(image_path: str, model_path: str):
     padded_image = np.pad(image_float, pad_width, mode='constant', constant_values=0)
     padded_shape = padded_image.shape
     
-    # --- 4. Create Patches ---
     patches = patchify(padded_image, (patch_size, patch_size, patch_size), step=patch_size)
     patches_reshaped = patches.reshape(-1, patch_size, patch_size, patch_size)
     patches_3_channel = np.repeat(patches_reshaped[..., np.newaxis], 3, axis=-1)
 
-    # --- 5. Preprocess Patches using the Training Script's Method ---
     print("Applying preprocessing to patches...")
     _, specific_preprocess_input_wrapped = Classifiers.get('vgg16')
     if hasattr(specific_preprocess_input_wrapped, '__wrapped__'):
@@ -71,24 +61,20 @@ def run_3d_inference(image_path: str, model_path: str):
         actual_preprocess_function = specific_preprocess_input_wrapped
     preprocessed_patches = actual_preprocess_function(patches_3_channel)
 
-    # --- 6. Run Prediction ---
     print(f"Running prediction on {len(preprocessed_patches)} patches...")
     prediction_patches = model.predict(preprocessed_patches, batch_size=4)
     foreground_probs = prediction_patches[..., 1]
     threshold = 0.5 # You can now tune this threshold meaningfully
     predicted_mask_patches = (foreground_probs >= threshold).astype(np.uint8)
 
-    # --- 7. Reconstruct & Un-pad ---
     predicted_mask_grid = predicted_mask_patches.reshape(patches.shape)
     reconstructed_mask = unpatchify(predicted_mask_grid, padded_shape)
     crop_slices = tuple(slice(pad[0], dim_size + pad[0]) for dim_size, pad in zip(original_shape, pad_width))
     final_prediction_mask = reconstructed_mask[crop_slices]
 
-    # --- 8. Post-Process ---
     final_prediction_mask = post_process_mask(final_prediction_mask, min_size=500)
     print("Inference complete.")
 
-    # --- 9. Load Ground Truth ---
     ground_truth_data = None
     mask_path = image_path.replace("ImagesVl", "labelsVl")
     if os.path.exists(mask_path):
@@ -110,13 +96,11 @@ def visualize_with_slider(image_volume: np.ndarray, predicted_mask: np.ndarray, 
     fig, axes = plt.subplots(1, num_plots, figsize=(6 * num_plots, 7))
     fig.subplots_adjust(bottom=0.2)
     
-    # Panel 1: Original Image
     ax_img = axes[0]
     ax_img.set_title("Original Image")
     im_display = ax_img.imshow(np.rot90(image_volume[:, :, initial_slice]), cmap='gray')
     ax_img.axis('off')
 
-    # Panel 2: Predicted Mask Overlay
     ax_pred = axes[1]
     ax_pred.set_title("Predicted Mask Overlay")
     pred_img_display = ax_pred.imshow(np.rot90(image_volume[:, :, initial_slice]), cmap='gray')
@@ -124,13 +108,11 @@ def visualize_with_slider(image_volume: np.ndarray, predicted_mask: np.ndarray, 
     pred_mask_display = ax_pred.imshow(pred_masked_overlay, cmap='jet', alpha=0.5)
     ax_pred.axis('off')
 
-    # Panel 3: Ground Truth Mask Overlay (if available)
     if has_ground_truth:
         ax_gt = axes[2]
         ax_gt.set_title("Ground Truth Mask Overlay")
         gt_img_display = ax_gt.imshow(np.rot90(image_volume[:, :, initial_slice]), cmap='gray')
         
-        # This line is now correct
         gt_masked_overlay = np.ma.masked_where(np.rot90(ground_truth_mask[:, :, initial_slice]) == 0, np.rot90(ground_truth_mask[:, :, initial_slice]))
         
         gt_mask_display = ax_gt.imshow(gt_masked_overlay, cmap='spring', alpha=0.6)
@@ -150,7 +132,6 @@ def visualize_with_slider(image_volume: np.ndarray, predicted_mask: np.ndarray, 
         if has_ground_truth:
             gt_img_display.set_data(np.rot90(image_volume[:, :, slice_idx]))
             
-            # This line inside the update function is also now correct
             gt_masked_overlay = np.ma.masked_where(np.rot90(ground_truth_mask[:, :, slice_idx]) == 0, np.rot90(ground_truth_mask[:, :, slice_idx]))
 
             gt_mask_display.set_data(gt_masked_overlay)
