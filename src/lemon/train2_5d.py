@@ -184,7 +184,8 @@ def train_model2_5d(path, file_name,
                     LR          = 1e-3,
                     N_EPOCHS    = 50,
                     BATCH_SIZE  = 4,
-                    THRESH_IoU  = 0.20):
+                    THRESH_IoU  = 0.20,
+                    classes = 1):
 
     DEVICE      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -194,7 +195,7 @@ def train_model2_5d(path, file_name,
         encoder_name="efficientnet-b4",
         encoder_weights="imagenet",
         in_channels=win_size,
-        classes=1,
+        classes=classes,
         activation=None).to(DEVICE)
 
 
@@ -291,13 +292,14 @@ def train_model2_5d(path, file_name,
           max_score = val_iou
     return f'best_model{file_name}.pth'
 
-def train_model2d(path, filename, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20):
+def train_model2d(path, filename, LR = 1e-3, N_EPOCHS = 50, BATCH_SIZE  = 4, THRESH_IoU  = 0.20, classes=1):
     return train_model2_5d(path, filename, 
                         win_size=1,
                         LR=LR,
                         N_EPOCHS=N_EPOCHS,
                         BATCH_SIZE=BATCH_SIZE,
-                        THRESH_IoU=THRESH_IoU)
+                        THRESH_IoU=THRESH_IoU,
+                        classes=1)
 
 if __name__ == "__main__":
     dataset_path = "test_dataset"
