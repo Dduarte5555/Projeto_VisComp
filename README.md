@@ -31,9 +31,8 @@ Caso seja necessário, você pode instalar um env de conda com a versão de pyth
 Para a validação do programa, uma série de scipts foram montados, que demonstram a usabilidade da biblioteca, e como ela funciona.
 
 ```python test_inference.py```
-```python src/lemon/Inference3d.py```
-```python src/lemon/train_test.py```
-```python src/lemon/train_test.py```
+```python test_metrics.py.py```
+```python test_train.py.py```
 
 
 
@@ -98,5 +97,3 @@ evaluate_folder(
     model_path="caminho para o modelo", 
     inference_function=funcao_de_inferencia
 )
-
-Tira as métricas relevantes para todos os modelos. O arquivo [inference_test.py](src/lemon/inference_test.py) está configurado de forma que automaticamente tira as métricas para os 3 modelos treinados.
